@@ -75,6 +75,9 @@ final class SearchController: NSObject, NSWindowDelegate, NSTextFieldDelegate, N
     private var results: [AppEntry] = []
     private var icons: [String: NSImage] = [:]
     private let glass = NSGlassEffectView()
+    /// Frosted layer under the glass. Glass alone refracts what's behind it sharply;
+    /// Spotlight blurs it, which keeps text legible over busy backgrounds.
+    private let backdrop = NSVisualEffectView()
 
     /// The window never changes size: it is a transparent canvas big enough for the tallest
     /// list plus a margin, and only the glass inside it grows. That keeps the glass's own
@@ -119,6 +122,13 @@ final class SearchController: NSObject, NSWindowDelegate, NSTextFieldDelegate, N
 
         let root = NSView(frame: NSRect(origin: .zero, size: Self.windowSize))
         panel.contentView = root
+        backdrop.material = .popover
+        backdrop.blendingMode = .behindWindow
+        backdrop.state = .active
+        backdrop.maskImage = Self.roundedMask(radius: Metrics.cornerRadius)
+        backdrop.frame = glassFrame(height: Metrics.barHeight)
+        root.addSubview(backdrop)
+
         glass.frame = glassFrame(height: Metrics.barHeight)
         glass.cornerRadius = Metrics.cornerRadius
         content.frame = glass.bounds
@@ -127,7 +137,7 @@ final class SearchController: NSObject, NSWindowDelegate, NSTextFieldDelegate, N
         glass.contentView = content
         root.addSubview(glass)
 
-        let symbol = NSImage.SymbolConfiguration(pointSize: Metrics.iconPointSize, weight: .medium)
+        let symbol = NSImage.SymbolConfiguration(pointSize: Metrics.iconPointSize, weight: .regular)
         glassIcon.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: "Search")?
             .withSymbolConfiguration(symbol)
         glassIcon.contentTintColor = .secondaryLabelColor
@@ -222,6 +232,7 @@ final class SearchController: NSObject, NSWindowDelegate, NSTextFieldDelegate, N
                               width: size.width, height: size.height), display: true)
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(field)
+        (field.currentEditor() as? NSTextView)?.insertionPointColor = .labelColor
     }
 
     func hide() {
@@ -252,6 +263,18 @@ final class SearchController: NSObject, NSWindowDelegate, NSTextFieldDelegate, N
         resize(animated: animated)
     }
 
+    private static func roundedMask(radius: CGFloat) -> NSImage {
+        let side = radius * 2 + 1
+        let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
+        image.resizingMode = .stretch
+        return image
+    }
+
     private func glassFrame(height: CGFloat) -> NSRect {
         NSRect(x: Self.margin, y: Self.windowSize.height - Self.margin - height,
                width: Metrics.width, height: height)
@@ -262,6 +285,7 @@ final class SearchController: NSObject, NSWindowDelegate, NSTextFieldDelegate, N
         let height = Metrics.barHeight + (rows > 0 ? CGFloat(rows) * Metrics.rowHeight + Metrics.listBottomPadding : 0)
         guard glass.frame.height != height else { return }
         glass.frame = glassFrame(height: height)
+        backdrop.frame = glass.frame
         content.frame = glass.bounds
         layoutContent()
     }
