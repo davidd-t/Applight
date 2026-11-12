@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var hotKey: HotKey?
     private var statusItem: NSStatusItem!
     private let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLogin), keyEquivalent: "")
+    private let windowDragItem = NSMenuItem(title: "Move Windows with ⌃⌘ Drag", action: #selector(toggleWindowDrag), keyEquivalent: "")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         controller = SearchController(index: index, usage: usage)
@@ -31,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         buildMainMenu()
         buildStatusItem()
+        if !arguments.contains("--snapshot") { WindowDragger.shared.startIfEnabled() }
 
         hotKey = HotKey(keyCode: kVK_Space, modifiers: cmdKey) { [weak self] in self?.controller.toggle() }
         if hotKey == nil {
@@ -87,6 +89,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let show = NSMenuItem(title: "Show Applight", action: #selector(showPanel), keyEquivalent: "")
         show.target = self
         menu.addItem(show)
+        windowDragItem.target = self
+        windowDragItem.toolTip = "Hold Control+Command, then drag a window to move it or right-drag to resize it."
+        menu.addItem(windowDragItem)
         loginItem.target = self
         menu.addItem(loginItem)
         menu.addItem(.separator())
@@ -96,6 +101,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        let dragger = WindowDragger.shared
+        windowDragItem.state = dragger.isEnabled ? (dragger.isActive ? .on : .mixed) : .off
+        windowDragItem.title = dragger.isEnabled && !dragger.isActive
+            ? "Move Windows with ⌃⌘ Drag (needs Accessibility)"
+            : "Move Windows with ⌃⌘ Drag"
+    }
+
+    @objc private func toggleWindowDrag() {
+        WindowDragger.shared.isEnabled.toggle()
     }
 
     @objc private func showPanel() {

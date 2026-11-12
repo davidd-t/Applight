@@ -11,7 +11,9 @@ cp .build/release/Applight "$APP/Contents/MacOS/Applight"
 cp Scripts/Info.plist "$APP/Contents/Info.plist"
 mkdir -p "$APP/Contents/Resources"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
-codesign --force --sign - "$APP"
+# A stable identity keeps the Accessibility grant valid across rebuilds; ad-hoc signing breaks it every time.
+IDENTITY=$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development/ {print $2; exit}')
+codesign --force --sign "${IDENTITY:--}" "$APP"
 echo "Built $APP"
 
 if [[ "${1:-}" == "install" ]]; then

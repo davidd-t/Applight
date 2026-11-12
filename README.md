@@ -8,6 +8,7 @@ A Spotlight-style launcher for macOS that searches only your installed apps. Not
 - Instant: apps are held in memory, a search takes about 0.1 ms
 - Fuzzy matching (`vsc` finds Visual Studio Code) that learns what you pick
 - Lives in the menu bar, starts at login
+- Linux-style window moving: hold Ctrl+Cmd and drag any window to move it, or right-drag to resize it (toggle in the menu bar; needs Accessibility permission)
 
 ## Install
 
