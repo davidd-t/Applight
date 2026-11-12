@@ -21,12 +21,12 @@ public final class AppIndex {
         ]
     }
 
-    static let extras = [URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app")]
+    public static let extras = [URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app")]
 
     public init() {}
 
     /// Synchronous scan; safe to call from any thread.
-    public static func scan() -> [AppEntry] {
+    public static func scan(roots: [URL] = roots, extras: [URL] = extras) -> [AppEntry] {
         var seen = Set<String>()
         var out: [AppEntry] = []
         func add(_ url: URL, name: String?) {
@@ -48,9 +48,19 @@ public final class AppIndex {
                 let values = try? item.resourceValues(forKeys: [.isDirectoryKey, .localizedNameKey])
                 if item.pathExtension == "app" {
                     add(item, name: values?.localizedName)
+                    // Apps can ship other apps (Xcode → Device Hub, Instruments, FileMerge).
+                    walkBundled(item.appendingPathComponent("Contents/Applications"))
                 } else if depth < 2, values?.isDirectory == true {
                     walk(item, depth: depth + 1)
                 }
+            }
+        }
+        func walkBundled(_ dir: URL) {
+            guard let items = try? FileManager.default.contentsOfDirectory(
+                at: dir, includingPropertiesForKeys: [.localizedNameKey], options: [.skipsHiddenFiles]
+            ) else { return }
+            for item in items where item.pathExtension == "app" {
+                add(item, name: try? item.resourceValues(forKeys: [.localizedNameKey]).localizedName)
             }
         }
         for root in roots { walk(root, depth: 0) }
