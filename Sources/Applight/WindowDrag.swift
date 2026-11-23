@@ -1,8 +1,11 @@
 import AppKit
 import ApplicationServices
+import ApplightCore
 
 /// Linux-style window handling: hold Ctrl+Cmd anywhere over a window, then
 /// drag to move it or right-drag to resize it from the nearest corner.
+/// Pushing the cursor against a screen edge while moving snaps the window to
+/// that half, a corner quarter, or the whole screen (top edge).
 /// Needs Accessibility permission.
 final class WindowDragger {
     static let shared = WindowDragger()
@@ -20,12 +23,14 @@ final class WindowDragger {
         let startSize: CGSize
         let fromLeft: Bool
         let fromTop: Bool
+        var snapFrame: CGRect?
     }
 
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
     private var drag: Drag?
     private var permissionTimer: Timer?
+    private let preview = SnapPreview()
 
     var isEnabled: Bool {
         get { UserDefaults.standard.object(forKey: Self.enabledKey) as? Bool ?? true }
@@ -83,6 +88,7 @@ final class WindowDragger {
         tap = nil
         source = nil
         drag = nil
+        preview.hide()
     }
 
     /// Returns true when the event should be swallowed.
@@ -111,6 +117,7 @@ final class WindowDragger {
             switch drag.mode {
             case .move:
                 Self.setPoint(of: drag.window, CGPoint(x: drag.startOrigin.x + dx, y: drag.startOrigin.y + dy))
+                updateSnap(at: location)
             case .resize:
                 let width = max(120, drag.startSize.width + (drag.fromLeft ? -dx : dx))
                 let height = max(80, drag.startSize.height + (drag.fromTop ? -dy : dy))
@@ -124,13 +131,35 @@ final class WindowDragger {
             return true
 
         case .leftMouseUp, .rightMouseUp:
-            guard drag != nil else { return false }
-            drag = nil
+            guard let drag else { return false }
+            if let frame = drag.snapFrame { snap(drag, to: frame) }
+            preview.hide()
+            self.drag = nil
             return true
 
         default:
             return false
         }
+    }
+
+    // MARK: - Snapping
+
+    private func updateSnap(at location: CGPoint) {
+        guard drag != nil else { return }
+        var frame: CGRect?
+        if let screen = ScreenSpace.screen(at: location),
+           let zone = SnapZone.zone(at: location, screen: screen.frame) {
+            frame = zone.frame(in: screen.visible)
+        }
+        drag?.snapFrame = frame
+        if let frame { preview.show(frame) } else { preview.hide() }
+    }
+
+    private func snap(_ drag: Drag, to frame: CGRect) {
+        // Position, then size, then position again: apps may clamp the size to the screen they're on.
+        Self.setPoint(of: drag.window, frame.origin)
+        Self.setSize(of: drag.window, frame.size)
+        Self.setPoint(of: drag.window, frame.origin)
     }
 
     // MARK: - Accessibility helpers
